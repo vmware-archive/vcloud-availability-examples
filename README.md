@@ -23,3 +23,4 @@ questions about the CLA process, please refer to our [FAQ](https://cla.vmware.co
 refer to [CONTRIBUTING.md](CONTRIBUTING.md).
 
 ## License
+This work is available under the [Apache 2 license](LICENSE).
