@@ -1,24 +1,19 @@
 
 
 # vcloud-availability-examples
+A collection of scripts to help with the operation and management of vCloud Availability.
 
 ## Overview
+The vcloud-availability team will be posting example scripts that help with installation and management of vCloud Availability. These scripts will include API, UI, and utility examples.
 
 ## Try it out
 
 ### Prerequisites
 
-* Prereq 1
-* Prereq 2
-* Prereq 3
-
-### Build & Run
-
-1. Step 1
-2. Step 2
-3. Step 3
+Prerequisites for individual examples are provided in the example directory README.
 
 ## Documentation
+Documentation for individual examples are provided in the example directory README.
 
 ## Contributing
 
