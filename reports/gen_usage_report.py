@@ -21,7 +21,7 @@ from requests.packages.urllib3.exceptions import InsecureRequestWarning
 
 #Hide warning when we are skipping the SSL verification check.
 requests.packages.urllib3.disable_warnings(InsecureRequestWarning)
-HEADERS = {'Accept' : 'application/*+xml;version=6.0'}
+HEADERS = {'Accept' : 'application/*+xml;version=6.0;vr-version=3.0'}
 VERIFY_CERT = True
 
 #Login
@@ -101,7 +101,7 @@ def process_detail(href):
     Return dict of replication details.
     Computes TotalVMReplicationSize as a helper.
     """
-    
+
     repl_detail = {'Disks':[], 'TotalVMReplicationSize': 0}
 
     replication_detail = vcd_get(href)
@@ -124,6 +124,40 @@ def process_detail(href):
 
     return repl_detail
 
+def get_paged_data(url, api):
+    """
+    Return replication_group data that is paged
+    """
+    ret_data = []
+    get_data = True
+    page_num = 1
+    while get_data:
+        replication_references = vcd_get("%s/%s?page=%s" % (url, api, page_num))
+        total_vms = int(replication_references.attrib['total'])
+        page_size = int(replication_references.attrib['pageSize'])
+
+        for reference in replication_references:
+            if reference.tag.endswith('Reference'):
+                repl_data = {'Detail': {}}
+
+                replication_group = vcd_get(reference.attrib['href'])
+                repl_data['Name'] = replication_group.attrib['name']
+                repl_data['Id'] = replication_group.attrib['id']
+
+                for el_rg in replication_group:
+                    if el_rg.tag.endswith('Link') and el_rg.attrib['rel'] == 'down:details':
+                        repl_data['Detail'] = process_detail(el_rg.attrib['href'])
+                    elif not el_rg.tag.endswith('Link'):
+                        repl_data[fix_ns(el_rg.tag)] = process_children(el_rg)
+
+                ret_data.append(repl_data)
+        if (page_size * page_num) < total_vms:
+            page_num += 1
+        else:
+            get_data = False
+
+    return ret_data
+
 def get_replications(orgs):
     """
     Return a dict of all the replicated VMs.
@@ -136,36 +170,15 @@ def get_replications(orgs):
             # Creating Dict to allow for expansion of Organization data.
             repl_info[key] = {'ReplicatedVMs':[], 'TotalOrganizationReplicationSize': 0}
 
-            # ISSUE #2 Consider using grequests module to speed up preformance.
-            get_data = True
-            page_num = 1
-            while get_data:
-                replication_references = vcd_get(url+"/replications?page=%s" % page_num)
-                total_vms = int(replication_references.attrib['total'])
-                page_size = int(replication_references.attrib['pageSize'])
+            # Process incoming
+            incoming_repl_data = get_paged_data(url, "replications")
+            for ird in incoming_repl_data:
+                repl_info[key]['TotalOrganizationReplicationSize'] += ird['Detail'].get('TotalVMReplicationSize', 0)
+            repl_info[key]['ReplicatedVMs'].extend(incoming_repl_data)
 
-                for reference in replication_references:
-                    if reference.tag.endswith('Reference'):
-                        repl_data = {'Detail': {}}
-
-                        replication_group = vcd_get(reference.attrib['href'])
-                        repl_data['Name'] = replication_group.attrib['name']
-                        repl_data['Id'] = replication_group.attrib['id']
-
-                        for el_rg in replication_group:
-                            if el_rg.tag.endswith('Link') and el_rg.attrib['rel'] == 'down:details':
-                                repl_data['Detail'] = process_detail(el_rg.attrib['href'])
-
-                            elif not el_rg.tag.endswith('Link'):
-                                repl_data[fix_ns(el_rg.tag)] = process_children(el_rg)
-
-                        repl_info[key]['TotalOrganizationReplicationSize'] += repl_data['Detail'].get('TotalVMReplicationSize', 0)
-                        repl_info[key]['ReplicatedVMs'].append(repl_data)
-
-                if (page_size * page_num) < total_vms:
-                    page_num += 1
-                else:
-                    get_data = False
+            # Process outgoing
+            outgoing_repl_data = get_paged_data(url, "failbackreplications")
+            repl_info[key]['ReplicatedVMs'].extend(outgoing_repl_data)
 
     return repl_info
 
