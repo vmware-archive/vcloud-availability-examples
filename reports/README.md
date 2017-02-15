@@ -16,6 +16,17 @@ The output includes data for all replication enabled virtual data centers in the
 * pip      (included in Python 2.7.9 and greater)
 * additional python modules installed using pip: requests, yarg, docopt, pipreqs
 
+### Installation
+
+```git clone https://github.com/vmware/vcloud-availability-examples.git```
+
+```cd vcloud-availability-examples/reports```
+
+```pip install pipreqs```
+
+
+
+
 ### Usage
 
 * Dump data to screen:
