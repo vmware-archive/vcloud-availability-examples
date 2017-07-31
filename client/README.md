@@ -30,9 +30,9 @@ A bash script that implements a basic vcd rest client.
 
 ```./vclient login 207.187.188.190 'administrator@system' 'vmpass42' ```
 
-* Get the org uri
+* Get the org uri:
 
-```
+```xml
 ./vclient g org 
 
  <?xml version="1.0" encoding="UTF-8"?>
