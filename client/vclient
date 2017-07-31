@@ -1,0 +1,258 @@
+#!/bin/bash
+
+#
+# vCloud REST Client v0.1
+#
+# Launch without arguments for help.
+#
+# Supported configuration settings:
+# accept=Accept: application/*+xml;version=6.0
+# addr=vcloud-address
+# user=root@System
+# pass=password
+# noheaders=1    //if this setting exists HTTP response headers will not be displayed
+# nohighlight=1  //if this setting exists no result content highlighting will be done
+#
+
+OUT="/tmp/$RANDOM"
+CONTENT="$OUT-content.txt"
+HEADERS="$OUT-headers.txt"
+LINKS="$OUT-links.txt"
+
+ORIG_EXE="$0"
+EXE=`basename $0`
+
+CFG=$(eval echo ~/.vcd)
+
+CURL=`which curl`
+
+ACCEPT='Accept: application/*+xml;version=6.0;vr-version=4.0'
+
+C_CYAN=`echo -e -n "\033[0;36m"`
+C_TASKSTATUS=`echo -e -n "\033[1;36m"`
+C_NONE=`echo -e -n "\033[0m"`
+
+function cleanup {
+    if [ -r "$HEADERS" ]; then
+	if [ "$(get_setting noheaders)" == "" ]; then
+	    cat "$HEADERS"
+	fi
+    fi
+
+    if [ -r "$CONTENT" ]; then
+        if [ "$VCD_LINKNUMBER" != "" ]; then
+            #gather hyperlinks from the response body and dump them to stderr
+            grep -E -o 'href="([^"]+)"' "$CONTENT" | awk -F '"' '{print $2}' 1>&2
+	fi
+
+        #Only do link numbering and syntax highlighting when stdout is a terminal
+        #and when the nohighlight option is unset:
+        if [ "$(get_setting nohighlight)" == "" ] && [ -t 1 ]; then
+            if [ "$VCD_LINKNUMBER" != "" ]; then
+                #link numbering:
+                perl -i -e 'local $/; $doc = <>; @t = split(/href="([^"]+)"/, $doc); for $i (0 .. $#t) { if ($i % 2) {print "href='\\\"'"; print (($i + 1) / 2); print " - "; print $t[$i]; print "'\\\"'";} else {print $t[$i];}}' "$CONTENT"
+            fi
+
+            #highlight tasks:
+	    EXPR='s/href="([^"]+)"/href="'$C_CYAN'\1'$C_NONE'"/g'
+	    sed -r -i -e "$EXPR" "$CONTENT"
+
+            #highlight task results:
+	    EXPR='s/^<Task(.+?)status="([^"]*)"/<Task\1status="'$C_TASKSTATUS'\2'$C_NONE'"/'
+	    sed -r -i -e "$EXPR" "$CONTENT"
+	fi
+	cat "$CONTENT"
+    fi
+
+    rm "$HEADERS" "$CONTENT" "$LINKS" > /dev/null 2>&1
+}
+
+function usage {
+    cat <<EOF
+Usage: $EXE command [args]
+Where: command is one of
+       l|login vcloud-addr root@System vmware
+	   Creates a session in vCloud and stores the auth token and the
+           connection settings in the CFG file
+       ql|quicklogin
+	   Like login but obtains vcloud-addr, username and password from CFG
+       cfg
+	   Without arguments shows all settings
+       cfg name value
+	   Updates the respective CFG file
+       shell
+	   Enters interactive mode
+       g|get uri
+       u|put uri [filename of stuff to put [application/...+xml]]
+       p|post uri [filename of stuff to post [application/...+xml]]
+       d|delete uri
+
+Note: If uri does not start with 'http', the string 'https://vcloud-addr/api/'
+      will be prepended to the uri, where vcloud-addr will be taken from the
+      CFG file. So an URI like 'org' will be automatically translated to
+      'https://vcloud-addr/api/org' as long as the CFG file contains the
+      correct 'addr' (and 'auth') settings.
+EOF
+    cleanup
+    exit 1
+}
+
+function check_arg {
+    while [ $# -gt 0 ]; do
+	if [ "$2" == "" ]; then
+	    echo "$EXE: missing arg: $1"
+	    echo "$EXE: Launch $EXE without arguments for help"
+	    cleanup
+	    exit 2
+	fi
+	shift 2
+    done
+}
+
+function login {
+    ADDR="$1"
+    USER="$2"
+    PASS="$3"
+    check_arg ADDR "$ADDR" USER "$USER" PASS "$PASS"
+
+    set_setting addr "$ADDR"
+    set_setting user "$USER"
+    set_setting pass "$PASS"
+
+    "$CURL" -# -o "$CONTENT" -D "$HEADERS" -k -X POST --user "$USER:$PASS" -H "$ACCEPT" "https://$ADDR/api/sessions"
+
+    COOKIE=`grep x-vcloud-authorization "$HEADERS" | awk -F : '{print $2}'`
+    set_setting auth "$COOKIE"
+}
+
+function req {
+    METH="$1"
+    URI="$2"
+    AUTH=`get_setting auth`
+
+    check_arg METHOD "$METH" URI "$URI" AUTH "$AUTH"
+
+    if [ -r "$3" ]; then
+        POSTDATA="--data-binary @$3"
+        if [[ "$4" != application* ]]; then
+            CONTENTTYPE="-H Content-Type:application/*+xml"
+        else
+            CONTENTTYPE="-H Content-Type:$4"
+        fi
+    fi
+
+    if [[ "$URI" != http* ]]; then
+	ADDR=`get_setting addr`
+	check_arg ADDR "$ADDR"
+	URI="https://${ADDR}/api/${URI}"
+    fi
+
+    "$CURL" $CURL_OPTS -# -o "$CONTENT" -D "$HEADERS" -k -X "$METH" $POSTDATA $CONTENTTYPE \
+	-H "$ACCEPT" -H "x-vcloud-authorization: ${AUTH}" \
+	"$URI"
+}
+
+function set_setting {
+    NAME="$1"
+    VALU="$2"
+    check_arg SETTING_NAME "$NAME" SETTING_VALUE "$VALU"
+
+    touch "$CFG"
+
+    sed -r -i -e "/^${NAME}=/d" "$CFG"
+    echo "$NAME=$VALU" >> "$CFG"
+}
+
+function get_setting {
+    NAME="$1"
+    check_arg SETTING_NAME "$NAME"
+    touch "$CFG"
+    LINE=`grep "$NAME" "$CFG"`
+    LEN=${#NAME}
+    echo ${LINE:LEN+1} | tr -d '\r\n'
+}
+
+function get_setting_safe {
+    RESULT=`get_setting "$1"`
+    if [ "$RESULT" == '' ]; then
+	echo "$2"
+    else
+	echo "$RESULT"
+    fi
+}
+
+function interactive {
+    echo "Entering interactive mode. Hit Ctrl+D to exit."
+    while read -a REPLY -e -p"vcd> "; do
+        #replace numbers with hrefs:
+        for index in ${!REPLY[*]}
+        do
+            if [[ ${REPLY[$index]} =~ ^-?[0-9]+$ ]]; then
+                #compensate for curl noise at the beginning of the links file:
+                urlno=$((1 + ${REPLY[$index]}))
+
+                the_url=$(sed -n "${urlno}p" "$LINKS")
+                if [ "$the_url" != "" ]; then
+                    REPLY[$index]="$the_url"
+                fi
+            fi
+        done
+
+        history -s ${REPLY[@]}
+        echo "---> ${REPLY[@]}"
+
+        #call child vcd process and gather hyperlinks from its stderr:
+        VCD_LINKNUMBER=1 $ORIG_EXE ${REPLY[@]} 2>"$LINKS"
+    done
+}
+
+ACCEPT=`get_setting_safe accept "$ACCEPT"`
+
+CMD="$1"
+
+shift
+
+case "$CMD" in
+    cfg )
+    if [ "$1" == '' ]; then
+	cat "$CFG" | sort
+    else
+	set_setting "$1" "$2"
+    fi
+    ;;
+
+    ql|quicklogin )
+    login "$(get_setting addr)" "$(get_setting user)" "$(get_setting pass)"
+    ;;
+
+    l|login )
+    login $*
+    ;;
+
+    g|get )
+    req GET $*
+    ;;
+
+    p|post )
+    req POST $*
+    ;;
+
+    u|put )
+    req PUT $*
+    ;;
+
+    d|del|delete )
+    req DELETE $*
+    ;;
+
+    s|shell )
+    interactive $*
+    ;;
+
+    *)
+    echo "$EXE: Bad command: $CMD"
+    usage
+    ;;
+esac
+
+cleanup
