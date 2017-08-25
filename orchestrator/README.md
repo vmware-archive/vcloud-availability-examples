@@ -17,8 +17,20 @@ Execution of workflow examples requires installation of the following products:
 * VMware vSphere Replication Appliance 6 installed and registered with a vCenter Server.
 
 
-## Documentation
-Documentation for individual examples are provided in the example directory README.
+## Samples
+
+* DR Plan Example
+
+A pair of workflows that enable the creation and execution of a Disaster Recovery plan that assembles replicated virtual machines into prioritized groups and performs failover / test operations on the groups in the cloud in priority order.
+
+* Protect VMs in folder
+
+A workflow that configures replication for all VMs in a specified vcenter folder.  This workflow can be scheduled to run periodically to protect VMs as they are added to the folder.
+
+* Customize protected VM
+
+A workflow that changes the IP of a VM after failover. 
+
 
 ## Contributing
 
