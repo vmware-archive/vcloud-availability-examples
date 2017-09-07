@@ -18,7 +18,7 @@ Execution of workflow examples requires installation of the following products:
 
 ## Workflows
 
-![workflows Screenshot](/images/workflows.png "workflows Screenshot")
+![workflows Screenshot](/orchestrator/images/workflows.png "workflows Screenshot")
 
 ## Samples
 
