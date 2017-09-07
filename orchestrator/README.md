@@ -16,6 +16,9 @@ Execution of workflow examples requires installation of the following products:
 
 * VMware vSphere Replication Appliance 6 installed and registered with a vCenter Server.
 
+## Workflows
+
+![workflows Screenshot](/images/workflows.png "workflows Screenshot")
 
 ## Samples
 
@@ -27,7 +30,7 @@ A pair of workflows that enable the creation and execution of a Disaster Recover
 
 A workflow that configures replication for all VMs in a specified vcenter folder.  This workflow can be scheduled to run periodically to protect VMs as they are added to the folder.
 
-* Customize protected VM
+* Change IP of protected VM
 
 A workflow that changes the IP of a VM after failover. 
 
