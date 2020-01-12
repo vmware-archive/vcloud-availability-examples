@@ -1,5 +1,5 @@
 
-
+# VMware has ended active development of this project, this repository will no longer be updated.
 # vcloud-availability-examples
 A collection of scripts to help with the operation and management of vCloud Availability.
 
